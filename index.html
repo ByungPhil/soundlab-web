@@ -58,12 +58,17 @@
       ['touchstart', 'touchend', 'click'].forEach(function (ev) { document.addEventListener(ev, window.__slResume, true); });
       // 오디오 태그 재생기를 첫 터치 때 미리 열어 둔다 (iPhone은 화면 터치 없이 시작한 재생을 막는다)
       var unlocked = false;
+      var silent = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
       var unlock = function () {
-        if (unlocked) return; unlocked = true;
+        if (unlocked) return;
         var a = window.__slAudio || (window.__slAudio = new Audio());
-        var silent = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+        // 이미 소리가 나는 중이거나 실제 소리가 들어 있으면 건드리지 않는다 (스크롤하려고 화면을 만질 때 소리가 끊기지 않게)
+        if (a.src && a.src !== silent && a.src.indexOf('data:audio') !== 0) { unlocked = true; return; }
+        if (!a.paused) return;
         a.src = silent; a.volume = 0;
-        var p = a.play(); if (p && p.then) p.then(function () { a.pause(); }).catch(function () { unlocked = false; });
+        var p = a.play();
+        if (p && p.then) p.then(function () { if (a.src === silent) a.pause(); unlocked = true; }).catch(function () {});
+        else unlocked = true;
       };
       ['touchend', 'click'].forEach(function (ev) { document.addEventListener(ev, unlock, true); });
     })();
