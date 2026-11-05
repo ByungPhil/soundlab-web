@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0A0F1F">
+  <title>Sound Lab</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #0A0F1F; overflow: hidden;
+                 overscroll-behavior: none; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+    #unity-canvas { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; background: #0A0F1F; touch-action: none; }
+    #loading { position: fixed; left: 0; right: 0; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+               color: #EAF2FF; font-family: -apple-system, "Noto Sans KR", "Malgun Gothic", sans-serif; background: #0A0F1F; }
+    #loading .name { font-size: 28px; font-weight: 700; margin-bottom: 18px; }
+    #loading .name span { color: #22D3EE; }
+    #bar { width: min(70vw, 320px); height: 8px; background: #19234A; border-radius: 4px; overflow: hidden; }
+    #barfill { width: 0%; height: 100%; background: #22D3EE; }
+    #msg { margin-top: 14px; font-size: 13px; color: #9FB1D1; text-align: center; padding: 0 24px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="loading">
+    <div class="name">Sound<span>Lab</span></div>
+    <div id="bar"><div id="barfill"></div></div>
+    <div id="msg">불러오는 중… (처음에는 시간이 걸릴 수 있어요)</div>
+  </div>
+  <script>
+    var canvas = document.querySelector("#unity-canvas");
+    var config = {
+      dataUrl: "Build/SoundLabWeb.data",
+      frameworkUrl: "Build/SoundLabWeb.framework.js",
+      codeUrl: "Build/SoundLabWeb.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "SoundAnalysis",
+      productName: "Sound Lab",
+      productVersion: "1.0",
+      autoSyncPersistentDataPath: true,
+      devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),   // 폰에서 너무 큰 해상도로 그리지 않게
+    };
+    // 두 손가락 확대/더블탭 확대 막기 (iOS)
+    document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    document.addEventListener('dblclick', function (e) { e.preventDefault(); });
+
+    // 만들어지는 모든 오디오 컨텍스트를 기억해 두었다가, 화면을 만질 때마다 멈춘/중단된 것을 다시 깨운다 (iPhone은 마이크를 쓰고 나면 소리가 중단된 채 남는 일이 있다)
+    (function () {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      window.__slCtxs = [];
+      var W = function () { var c = new AC(...arguments); window.__slCtxs.push(c); return c; };
+      W.prototype = AC.prototype;
+      window.AudioContext = W; window.webkitAudioContext = W;
+      window.__slResume = function () {
+        window.__slCtxs.forEach(function (c) { if (c.state !== 'running' && c.state !== 'closed') { try { c.resume().catch(function () {}); } catch (e) {} } });
+      };
+      ['touchstart', 'touchend', 'click'].forEach(function (ev) { document.addEventListener(ev, window.__slResume, true); });
+      // 오디오 태그 재생기를 첫 터치 때 미리 열어 둔다 (iPhone은 화면 터치 없이 시작한 재생을 막는다)
+      var unlocked = false;
+      var unlock = function () {
+        if (unlocked) return; unlocked = true;
+        var a = window.__slAudio || (window.__slAudio = new Audio());
+        var silent = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+        a.src = silent; a.volume = 0;
+        var p = a.play(); if (p && p.then) p.then(function () { a.pause(); }).catch(function () { unlocked = false; });
+      };
+      ['touchend', 'click'].forEach(function (ev) { document.addEventListener(ev, unlock, true); });
+    })();
+
+    var script = document.createElement("script");
+    script.src = "Build/SoundLabWeb.loader.js";
+    script.onload = function () {
+      createUnityInstance(canvas, config, function (p) {
+        document.getElementById("barfill").style.width = (100 * p) + "%";
+      }).then(function () {
+        document.getElementById("loading").style.display = "none";
+      }).catch(function (m) {
+        document.getElementById("msg").textContent = "실행하지 못했어요: " + m;
+      });
+    };
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
